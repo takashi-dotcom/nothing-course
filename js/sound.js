@@ -1,5 +1,7 @@
 // オリジナルの短いメロディと効果音をWeb Audio APIで合成する。
 // 外部の音声ファイルやライブラリは使用しない。
+// マスター音量。旧0.7から2倍の1.4（音圧振幅で約+6dB）に調整。
+const MASTER_VOLUME = 1.4;
 const MUSIC_BPM = 112;
 const BEAT_SECONDS = 60 / MUSIC_BPM;
 const MELODY = [
@@ -40,7 +42,7 @@ export class SoundManager {
       try {
         this.context = new AudioContextType();
         this.master = this.context.createGain();
-        this.master.gain.value = 0.7;
+        this.master.gain.value = MASTER_VOLUME;
         this.master.connect(this.context.destination);
         this.effects = this.context.createGain();
         this.effects.gain.value = 0.78;
@@ -76,7 +78,7 @@ export class SoundManager {
     if (!ctx) return;
     const now = ctx.currentTime;
     this.master.gain.cancelScheduledValues(now);
-    this.master.gain.setTargetAtTime(0.7, now, 0.018);
+    this.master.gain.setTargetAtTime(MASTER_VOLUME, now, 0.018);
     if (isPlaying) this.startMusic();
   }
 
