@@ -19,22 +19,24 @@ const MELODY = [
 ];
 const CHORD_ROOTS = [48, 53, 55, 48, 53, 48, 55, 48];
 
-// クリア専用：静かに喜びが広がる、明るいオリジナル8小節のループ。
-// C → G → F → C → F → C → G → C。すべてメジャー三和音。
-// 単なる4音のファンファーレではなく、和音と旋律が続くエンディング曲。
-const CLEAR_BPM = 118;
+// ゴール後は通常曲と差別化し、ニ長調・ゆったり3拍子の独立した旋律に。
+// D → A → G → D → G → D → A → D、すべてメジャー和音。
+// 和音に馴染む音階上の経過音を使い、軽やかなワルツにする。
+const CLEAR_BPM = 106;
 const CLEAR_BEAT_SECONDS = 60 / CLEAR_BPM;
+const CLEAR_BEATS_PER_BAR = 3;
 const CLEAR_MELODY = [
-  76, 79, 84, null,  // C: E G C（明るく上昇）
-  83, 86, 79, null,  // G: B D G
-  81, 84, 89, null,  // F: A C F
-  88, 84, 79, null,  // C: E C G
-  84, 88, 91, null,  // C: C E G
-  89, 84, 81, null,  // F: F C A
-  83, 86, 79, null,  // G: B D G
-  84, null, 79, 84   // C: C - G C（解決して自然にループ）
+  78, 79, 81,     // D:  F#5 G5 A5
+  85, 83, 81,     // A:  C#6 B5 A5
+  79, 81, 83,     // G:  G5 A5 B5
+  86, null, 81,   // D:  D6 ... A5
+  83, 81, 79,     // G:  B5 A5 G5
+  78, 81, 86,     // D:  F#5 A5 D6
+  85, 83, 81,     // A:  C#6 B5 A5
+  86, null, 86    // D:  D6 ... D6
 ];
-const CLEAR_CHORD_ROOTS = [48, 55, 53, 48, 48, 53, 55, 48];
+const CLEAR_CHORD_ROOTS = [50, 57, 55, 50, 55, 50, 57, 50];
+const FANFARE_SECONDS = 1.04;
 const MAJOR_TRIAD_INTERVALS = [0, 4, 7];
 
 function pitch(midi) {
@@ -169,36 +171,40 @@ export class SoundManager {
     const melody = clear ? CLEAR_MELODY : MELODY;
     const roots = clear ? CLEAR_CHORD_ROOTS : CHORD_ROOTS;
     const beat = clear ? CLEAR_BEAT_SECONDS : BEAT_SECONDS;
+    const beatsPerBar = clear ? CLEAR_BEATS_PER_BAR : 4;
     const ahead = ctx.currentTime + 0.4;
 
     while (this.nextBeatTime < ahead && this.musicPlaying) {
       const index = this.beatIndex % melody.length;
       const now = this.nextBeatTime;
       const melodyNote = melody[index];
-      const root = roots[Math.floor(index / 4)];
+      const position = index % beatsPerBar;
+      const root = roots[Math.floor(index / beatsPerBar)];
 
-      if (index % 4 === 0) {
-        // 4拍ずっと響くメジャー和音とベース。クリア画面も無音にならない。
+      if (position === 0) {
+        // 通常曲の4拍子と違い、クリア曲は軽やかな3拍子のメジャー和音。
         for (const interval of MAJOR_TRIAD_INTERVALS) {
-          this.note(root + 12 + interval, now, beat * 4.06,
-            clear ? 0.031 : 0.030, "triangle", this.musicBus, 0.26, 0.90, 0.30);
+          this.note(root + 12 + interval, now, beat * (beatsPerBar + 0.06),
+            clear ? 0.029 : 0.030, clear ? "sine" : "triangle",
+            this.musicBus, 0.24, 0.87, 0.27);
         }
-        this.note(root, now, beat * 3.96,
-          clear ? 0.029 : 0.026, "sine", this.musicBus, 0.09, 0.83, 0.25);
+        this.note(root, now, beat * (beatsPerBar - 0.04),
+          clear ? 0.028 : 0.026, "sine", this.musicBus, 0.09, 0.83, 0.25);
       }
 
       if (melodyNote !== null) {
         const duration = this.melodyDuration(index, melody, beat);
-        // プレイ曲はそのまま。クリア曲は少し明るく、輪郭のある旋律。
         this.note(melodyNote, now, duration,
-          clear ? 0.078 : 0.065, "sine", this.musicBus, 0.034, 0.91, 0.15);
+          clear ? 0.075 : 0.065, clear ? "triangle" : "sine",
+          this.musicBus, 0.028, 0.89, 0.16);
         this.note(this.lowerHarmony(melodyNote, root), now, duration,
-          clear ? 0.024 : 0.021, "triangle", this.musicBus, 0.06, 0.85, 0.17);
-        // ゴールの喜びを、耳に刺さらない小さなきらめきで演出する。
-        if (clear && index % 4 === 0) {
-          this.note(melodyNote + 12, now, beat * 0.65,
-            0.011, "sine", this.musicBus, 0.018, 0.58, 0.14);
-        }
+          clear ? 0.017 : 0.021, "triangle", this.musicBus, 0.06, 0.85, 0.17);
+      }
+
+      // ゴール後は伴奏の2拍目・3拍目に柔らかな音を添え、3拍子らしさを出す。
+      if (clear && position > 0) {
+        this.note(root + (position === 1 ? 19 : 16), now, beat * 0.52,
+          0.015, "sine", this.musicBus, 0.018, 0.65, 0.15);
       }
       this.nextBeatTime += beat;
       this.beatIndex++;
@@ -213,7 +219,7 @@ export class SoundManager {
     this.startTrack("clear");
   }
 
-  startTrack(mode) {
+  startTrack(mode, delay = 0.07) {
     this.stopMusic();
     if (!this.enabled) return;
     const ctx = this.prepare();
@@ -223,10 +229,44 @@ export class SoundManager {
     this.musicBus.connect(this.master);
     this.musicMode = mode;
     this.musicPlaying = true;
-    this.nextBeatTime = ctx.currentTime + 0.07;
+    // クリア曲はファンファーレのあとから正確な音声時刻で開始する。
+    this.nextBeatTime = ctx.currentTime + Math.max(0.01, delay);
     this.beatIndex = 0;
     this.scheduleMusic();
     this.musicTimer = window.setInterval(() => this.scheduleMusic(), 90);
+  }
+
+  beginGoalSequence() {
+    // ゴールの瞬間に通常BGMを止め、専用の合図を鳴らしてから別の曲へ移る。
+    this.stopMusic();
+    if (!this.enabled) return;
+    const ctx = this.prepare();
+    if (!ctx) return;
+    this.playGoalTape();
+    this.playGoalFanfare();
+    this.startTrack("clear", FANFARE_SECONDS + 0.13);
+  }
+
+  playGoalFanfare() {
+    if (!this.enabled) return;
+    const ctx = this.prepare();
+    if (!ctx) return;
+    const t = ctx.currentTime + 0.035;
+    // 新規オリジナル。約1秒の素早く駆け上がる合図「トゥルルルルル！」。
+    // テンポ感も音域も通常BGMとは明確に切り替える。
+    const phrase = [74, 78, 81, 83, 85, 86, 90, 93, 98];
+    const gap = 0.083;
+    phrase.forEach((midi, index) => {
+      const when = t + index * gap;
+      const last = index === phrase.length - 1;
+      this.note(midi, when, last ? 0.32 : 0.13,
+        last ? 0.085 : 0.073, "triangle", this.effects,
+        0.003, 0.72, last ? 0.14 : 0.06);
+      if (last) {
+        this.note(midi - 12, when, 0.32,
+          0.034, "sine", this.effects, 0.008, 0.73, 0.16);
+      }
+    });
   }
 
   stopMusic() {
@@ -266,9 +306,10 @@ export class SoundManager {
     osc.type = "sine";
     osc.frequency.setValueAtTime(440, t);
     osc.frequency.exponentialRampToValueAtTime(620, t + 0.13);
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.087, t + 0.013);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+    // 入力の瞬間から可聴音を出す。従来の13msの立ち上がりを短縮。
+    gain.gain.setValueAtTime(0.018, t);
+    gain.gain.exponentialRampToValueAtTime(0.095, t + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
     osc.connect(gain);
     gain.connect(this.effects);
     osc.start(t);
