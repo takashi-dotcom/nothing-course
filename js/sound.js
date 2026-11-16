@@ -300,20 +300,27 @@ export class SoundManager {
     if (!this.enabled) return;
     const ctx = this.prepare();
     if (!ctx) return;
+
     const t = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(440, t);
-    osc.frequency.exponentialRampToValueAtTime(620, t + 0.13);
-    // 入力の瞬間から可聴音を出す。従来の13msの立ち上がりを短縮。
-    gain.gain.setValueAtTime(0.018, t);
-    gain.gain.exponentialRampToValueAtTime(0.095, t + 0.004);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+
+    // 瞬間的に輪郭のある「ポイッ」という軽いジャンプ音。
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(520, t);
+    osc.frequency.exponentialRampToValueAtTime(760, t + 0.035);
+    osc.frequency.exponentialRampToValueAtTime(620, t + 0.10);
+
+    // 入力と同時に発音。ゆっくり立ち上がる包絡を使わない。
+    gain.gain.setValueAtTime(0.11, t);
+    gain.gain.exponentialRampToValueAtTime(0.075, t + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+
     osc.connect(gain);
     gain.connect(this.effects);
     osc.start(t);
-    osc.stop(t + 0.17);
+    osc.stop(t + 0.12);
+
     osc.onended = () => {
       osc.disconnect();
       gain.disconnect();
