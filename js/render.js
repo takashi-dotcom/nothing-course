@@ -198,8 +198,51 @@ export class Renderer {
       }
     }
 
+    this.drawStartGuide(game);
     this.drawGoal(game, ground);
     this.drawPlayer(game, ground);
+  }
+
+  drawStartGuide(game) {
+    if (game.state !== "PLAYING") return;
+    const distance = Math.max(0, game.player.x - CONFIG.world.startX);
+    const fadeStart = 120;
+    const fadeEnd = 270;
+    if (distance >= fadeEnd) return;
+
+    const alpha = distance <= fadeStart ? 1 : (fadeEnd - distance) / (fadeEnd - fadeStart);
+    const c = this.ctx;
+    const x = this.width * .56;
+    const y = this.height * .35;
+    const s = Math.min(this.scale, 1.2);
+
+    c.save();
+    c.globalAlpha = alpha;
+    roundedRect(c, x - 64 * s, y - 26 * s, 128 * s, 52 * s, 26 * s, "rgba(255,255,255,.83)");
+    c.strokeStyle = "rgba(48,124,147,.24)";
+    c.lineWidth = 1.5 * s;
+    c.beginPath();
+    c.roundRect(x - 64 * s, y - 26 * s, 128 * s, 52 * s, 26 * s);
+    c.stroke();
+
+    c.fillStyle = "#307f95";
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.font = "700 " + (23 * s) + "px sans-serif";
+    c.fillText("Go!", x - 19 * s, y);
+
+    c.strokeStyle = "#307f95";
+    c.lineWidth = 4 * s;
+    c.lineCap = "round";
+    c.lineJoin = "round";
+    c.beginPath();
+    c.moveTo(x + 12 * s, y);
+    c.lineTo(x + 43 * s, y);
+    c.moveTo(x + 33 * s, y - 9 * s);
+    c.lineTo(x + 43 * s, y);
+    c.lineTo(x + 33 * s, y + 9 * s);
+    c.stroke();
+    c.restore();
   }
 
   drawGoal(game, ground) {
