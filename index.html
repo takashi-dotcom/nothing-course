@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#a9e0f6">
+  <meta name="description" content="敵も穴も障害物もない、小さな旅人の横スクロールゲーム。">
+  <title>何もないコース | 試作品</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="app">
+    <section class="game-container" aria-label="何もないコース">
+      <div class="stage" id="stage">
+        <canvas id="gameCanvas" aria-label="青空と草原を走る横スクロールゲーム">Canvas対応ブラウザで遊べます。</canvas>
+
+        <div class="screen title-screen" id="titleScreen">
+          <div class="title-panel">
+            <p class="eyebrow">小さな旅のゲーム</p>
+            <h1>何もないコース</h1>
+            <button type="button" class="action-button start-button" id="startButton">START <span aria-hidden="true">▶</span></button>
+          </div>
+        </div>
+
+        <p class="keyboard-hint" id="keyboardHint" hidden>← → / A D で移動　・　Space でジャンプ</p>
+
+        <div class="screen clear-screen" id="clearScreen" hidden>
+          <h2 class="clear-title">CLEAR!</h2>
+          <div class="clear-actions">
+            <button type="button" class="action-button" id="replayButton">もう一度遊ぶ</button>
+            <a class="action-button action-secondary" id="noteLink" href="https://note.com/joyful_cougar823">noteへ戻る</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls" id="touchControls" aria-label="ゲーム操作">
+        <div class="direction-controls">
+          <button class="control-button" type="button" data-action="left" aria-label="左に移動"><span aria-hidden="true">←</span></button>
+          <button class="control-button" type="button" data-action="right" aria-label="右に移動"><span aria-hidden="true">→</span></button>
+        </div>
+        <button class="control-button control-jump" type="button" data-action="jump" aria-label="ジャンプ"><span aria-hidden="true">↑</span></button>
+      </div>
+    </section>
+    <p class="prototype-label">試作品 ver.0.1 · 音声なし · スコア・時間制限なし</p>
+  </main>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
