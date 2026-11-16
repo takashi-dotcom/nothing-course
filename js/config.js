@@ -2,7 +2,7 @@
 export const CONFIG = Object.freeze({
   world: {
     startX: 448,
-    goalX: 7000,
+    goalX: 4380,
     leftEdge: 0
   },
   player: {
