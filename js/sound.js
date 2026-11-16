@@ -18,6 +18,23 @@ const MELODY = [
   79, 76, 84, null   // C: G E C -
 ];
 const CHORD_ROOTS = [48, 53, 55, 48, 53, 48, 55, 48];
+
+// クリア専用：静かに喜びが広がる、明るいオリジナル8小節のループ。
+// C → G → F → C → F → C → G → C。すべてメジャー三和音。
+// 単なる4音のファンファーレではなく、和音と旋律が続くエンディング曲。
+const CLEAR_BPM = 118;
+const CLEAR_BEAT_SECONDS = 60 / CLEAR_BPM;
+const CLEAR_MELODY = [
+  76, 79, 84, null,  // C: E G C（明るく上昇）
+  83, 86, 79, null,  // G: B D G
+  81, 84, 89, null,  // F: A C F
+  88, 84, 79, null,  // C: E C G
+  84, 88, 91, null,  // C: C E G
+  89, 84, 81, null,  // F: F C A
+  83, 86, 79, null,  // G: B D G
+  84, null, 79, 84   // C: C - G C（解決して自然にループ）
+];
+const CLEAR_CHORD_ROOTS = [48, 55, 53, 48, 48, 53, 55, 48];
 const MAJOR_TRIAD_INTERVALS = [0, 4, 7];
 
 function pitch(midi) {
@@ -33,6 +50,7 @@ export class SoundManager {
     this.musicBus = null;
     this.musicTimer = null;
     this.musicPlaying = false;
+    this.musicMode = null;
     this.nextBeatTime = 0;
     this.beatIndex = 0;
     this.unavailable = false;
@@ -61,7 +79,8 @@ export class SoundManager {
         this.master.connect(this.limiter);
         this.limiter.connect(this.context.destination);
         this.effects = this.context.createGain();
-        this.effects.gain.value = 0.78;
+        // BGMは気に入った音量のまま。操作の手応えを感じられるよう効果音だけ約1.65倍に。
+        this.effects.gain.value = 1.28;
         this.effects.connect(this.master);
       } catch (error) {
         console.warn("音声機能を初期化できません:", error);
@@ -78,7 +97,7 @@ export class SoundManager {
     return this.context;
   }
 
-  setEnabled(enabled, isPlaying) {
+  setEnabled(enabled, gameState) {
     if (this.enabled === enabled) return;
     this.enabled = enabled;
     if (!enabled) {
@@ -95,7 +114,8 @@ export class SoundManager {
     const now = ctx.currentTime;
     this.master.gain.cancelScheduledValues(now);
     this.master.gain.setTargetAtTime(MASTER_VOLUME, now, 0.018);
-    if (isPlaying) this.startMusic();
+    if (gameState === "PLAYING") this.startMusic();
+    if (gameState === "CLEAR") this.startClearMusic();
   }
 
   note(midi, when, duration, volume, type, destination, attack = 0.018, sustain = 0.78, release = 0.13) {
@@ -134,55 +154,74 @@ export class SoundManager {
   }
 
   // 次の発音まで伸ばす。音楽が「ポン、ポン」と途切れ続けないための設計。
-  melodyDuration(index) {
+  melodyDuration(index, melody = MELODY, beatSeconds = BEAT_SECONDS) {
     let beats = 1;
-    while (beats < MELODY.length && MELODY[(index + beats) % MELODY.length] === null) {
+    while (beats < melody.length && melody[(index + beats) % melody.length] === null) {
       beats++;
     }
-    return Math.max(0.18, beats * BEAT_SECONDS - 0.045);
+    return Math.max(0.18, beats * beatSeconds - 0.045);
   }
 
   scheduleMusic() {
     const ctx = this.context;
     if (!ctx || !this.musicPlaying || !this.musicBus) return;
+    const clear = this.musicMode === "clear";
+    const melody = clear ? CLEAR_MELODY : MELODY;
+    const roots = clear ? CLEAR_CHORD_ROOTS : CHORD_ROOTS;
+    const beat = clear ? CLEAR_BEAT_SECONDS : BEAT_SECONDS;
     const ahead = ctx.currentTime + 0.4;
+
     while (this.nextBeatTime < ahead && this.musicPlaying) {
-      const index = this.beatIndex % MELODY.length;
+      const index = this.beatIndex % melody.length;
       const now = this.nextBeatTime;
-      const melodyNote = MELODY[index];
+      const melodyNote = melody[index];
+      const root = roots[Math.floor(index / 4)];
 
-      const root = CHORD_ROOTS[Math.floor(index / 4)];
-      // 4拍のあいだメジャー三和音を鳴らし続け、音の隙間を作らない。
       if (index % 4 === 0) {
+        // 4拍ずっと響くメジャー和音とベース。クリア画面も無音にならない。
         for (const interval of MAJOR_TRIAD_INTERVALS) {
-          this.note(root + 12 + interval, now, BEAT_SECONDS * 4.06,
-            0.030, "triangle", this.musicBus, 0.26, 0.90, 0.30);
+          this.note(root + 12 + interval, now, beat * 4.06,
+            clear ? 0.031 : 0.030, "triangle", this.musicBus, 0.26, 0.90, 0.30);
         }
-        this.note(root, now, BEAT_SECONDS * 3.96,
-          0.026, "sine", this.musicBus, 0.09, 0.83, 0.25);
+        this.note(root, now, beat * 3.96,
+          clear ? 0.029 : 0.026, "sine", this.musicBus, 0.09, 0.83, 0.25);
       }
 
-      // 1〜2拍にまたがる滑らかな主旋律＋同じメジャーコードの下声。
       if (melodyNote !== null) {
-        const duration = this.melodyDuration(index);
+        const duration = this.melodyDuration(index, melody, beat);
+        // プレイ曲はそのまま。クリア曲は少し明るく、輪郭のある旋律。
         this.note(melodyNote, now, duration,
-          0.065, "sine", this.musicBus, 0.034, 0.91, 0.15);
+          clear ? 0.078 : 0.065, "sine", this.musicBus, 0.034, 0.91, 0.15);
         this.note(this.lowerHarmony(melodyNote, root), now, duration,
-          0.021, "triangle", this.musicBus, 0.06, 0.85, 0.17);
+          clear ? 0.024 : 0.021, "triangle", this.musicBus, 0.06, 0.85, 0.17);
+        // ゴールの喜びを、耳に刺さらない小さなきらめきで演出する。
+        if (clear && index % 4 === 0) {
+          this.note(melodyNote + 12, now, beat * 0.65,
+            0.011, "sine", this.musicBus, 0.018, 0.58, 0.14);
+        }
       }
-      this.nextBeatTime += BEAT_SECONDS;
+      this.nextBeatTime += beat;
       this.beatIndex++;
     }
   }
 
   startMusic() {
+    this.startTrack("play");
+  }
+
+  startClearMusic() {
+    this.startTrack("clear");
+  }
+
+  startTrack(mode) {
     this.stopMusic();
     if (!this.enabled) return;
     const ctx = this.prepare();
     if (!ctx) return;
     this.musicBus = ctx.createGain();
-    this.musicBus.gain.value = 0.68;
+    this.musicBus.gain.value = mode === "clear" ? 0.63 : 0.68;
     this.musicBus.connect(this.master);
+    this.musicMode = mode;
     this.musicPlaying = true;
     this.nextBeatTime = ctx.currentTime + 0.07;
     this.beatIndex = 0;
@@ -192,6 +231,7 @@ export class SoundManager {
 
   stopMusic() {
     this.musicPlaying = false;
+    this.musicMode = null;
     if (this.musicTimer !== null) {
       window.clearInterval(this.musicTimer);
       this.musicTimer = null;
@@ -294,19 +334,7 @@ export class SoundManager {
     };
   }
 
-  playClear() {
-    if (!this.enabled) return;
-    const ctx = this.prepare();
-    if (!ctx) return;
-    const t = ctx.currentTime + 0.02;
-    const notes = [72, 76, 79, 84];
-    for (let i = 0; i < notes.length; i++) {
-      this.note(notes[i], t + i * 0.16, i === 3 ? 0.52 : 0.26,
-        i === 3 ? 0.084 : 0.066, "sine", this.effects);
-    }
-  }
-
-  onVisibilityChange(hidden, isPlaying) {
+  onVisibilityChange(hidden, gameState) {
     if (hidden) {
       this.stopMusic();
       if (this.context && this.context.state === "running") {
@@ -314,6 +342,8 @@ export class SoundManager {
       }
       return;
     }
-    if (isPlaying && this.enabled) this.startMusic();
+    if (!this.enabled) return;
+    if (gameState === "PLAYING") this.startMusic();
+    if (gameState === "CLEAR") this.startClearMusic();
   }
 }
