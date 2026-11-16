@@ -115,7 +115,7 @@ export class SoundManager {
     this.master.gain.cancelScheduledValues(now);
     this.master.gain.setTargetAtTime(MASTER_VOLUME, now, 0.018);
     if (gameState === "PLAYING") this.startMusic();
-    if (gameState === "CLEAR") this.startClearMusic();
+    if (gameState === "GOAL" || gameState === "CLEAR") this.startClearMusic();
   }
 
   note(midi, when, duration, volume, type, destination, attack = 0.018, sustain = 0.78, release = 0.13) {
@@ -344,6 +344,6 @@ export class SoundManager {
     }
     if (!this.enabled) return;
     if (gameState === "PLAYING") this.startMusic();
-    if (gameState === "CLEAR") this.startClearMusic();
+    if (gameState === "GOAL" || gameState === "CLEAR") this.startClearMusic();
   }
 }
