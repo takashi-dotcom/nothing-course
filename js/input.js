@@ -10,6 +10,7 @@ export class InputController {
     this.keys = new Set();
     this.pointers = new Map();
     this.justJump = false;
+    this.onJumpPressed = null;
     this.enabled = false;
 
     window.addEventListener("keydown", event => this.onKeyDown(event));
@@ -41,6 +42,8 @@ export class InputController {
     event.preventDefault();
     if (!this.keys.has(event.code) && action === "jump" && !this.isDown("jump")) {
       this.justJump = true;
+      // 物理更新の次のフレームを待たず、キーを押した瞬間に通知する。
+      if (this.onJumpPressed) this.onJumpPressed();
     }
     this.keys.add(event.code);
   }
@@ -56,7 +59,10 @@ export class InputController {
     if (!this.enabled || event.button !== 0) return;
     event.preventDefault();
     const action = button.dataset.action;
-    if (action === "jump" && !this.isDown("jump")) this.justJump = true;
+    if (action === "jump" && !this.isDown("jump")) {
+      this.justJump = true;
+      if (this.onJumpPressed) this.onJumpPressed();
+    }
     this.pointers.set(event.pointerId, { action, button });
     try { button.setPointerCapture(event.pointerId); } catch (_) {}
     this.updateButtonAppearance();
