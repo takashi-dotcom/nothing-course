@@ -237,8 +237,8 @@ export class SoundManager {
   }
 
   beginGoalSequence() {
-    // ゴールの瞬間に通常BGMを止め、専用の合図を鳴らしてから別の曲へ移る。
-    this.stopMusic();
+    // ゴールで旧曲を約12msの短いフェードにして、合図と重ならないようにする。
+    this.stopMusic(0.012);
     if (!this.enabled) return;
     const ctx = this.prepare();
     if (!ctx) return;
@@ -269,7 +269,7 @@ export class SoundManager {
     });
   }
 
-  stopMusic() {
+  stopMusic(fadeSeconds = 0.06) {
     this.musicPlaying = false;
     this.musicMode = null;
     if (this.musicTimer !== null) {
@@ -280,7 +280,7 @@ export class SoundManager {
       const bus = this.musicBus;
       const now = this.context.currentTime;
       bus.gain.cancelScheduledValues(now);
-      bus.gain.setTargetAtTime(0.0001, now, 0.06);
+      bus.gain.setTargetAtTime(0.0001, now, fadeSeconds);
       // すでにスケジュールした長い和音の終了後に接続を解除する。
       window.setTimeout(() => bus.disconnect(), 3000);
       this.musicBus = null;
