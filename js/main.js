@@ -34,8 +34,9 @@ function onStateChange(state) {
   if (state === "GOAL") {
     sound.stopMusic();
     sound.playGoalTape();
+    // テープを切った瞬間から、クリア専用のBGMを流し続ける。
+    sound.startClearMusic();
   }
-  if (state === "CLEAR") sound.startClearMusic();
 }
 
 function beginGame() {
