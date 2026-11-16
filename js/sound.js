@@ -49,6 +49,8 @@ export class SoundManager {
     this.context = null;
     this.master = null;
     this.effects = null;
+    this.jumpOutput = null;
+    this.jumpBuffer = null;
     this.musicBus = null;
     this.musicTimer = null;
     this.musicPlaying = false;
@@ -84,6 +86,13 @@ export class SoundManager {
         // BGMは気に入った音量のまま。操作の手応えを感じられるよう効果音だけ約1.65倍に。
         this.effects.gain.value = 1.28;
         this.effects.connect(this.master);
+        // ジャンプ音だけは遅延を最小にするため、コンプレッサーを通さず出力。
+        // ピーク振幅は約0.3に抑え、他の音楽と重なる場合も過大になりにくくする。
+        this.jumpOutput = this.context.createGain();
+        this.jumpOutput.gain.value = MASTER_VOLUME * 1.28;
+        this.jumpOutput.connect(this.context.destination);
+        // START時に一度だけ波形を生成。ジャンプ時の音声合成負荷をなくす。
+        this.jumpBuffer = this.createJumpBuffer();
       } catch (error) {
         console.warn("音声機能を初期化できません:", error);
         this.unavailable = true;
@@ -99,6 +108,38 @@ export class SoundManager {
     return this.context;
   }
 
+  createJumpBuffer() {
+    if (!this.context) return null;
+    const ctx = this.context;
+    const sampleRate = ctx.sampleRate;
+    const seconds = 0.12;
+    const length = Math.ceil(sampleRate * seconds);
+    const buffer = ctx.createBuffer(1, length, sampleRate);
+    const channel = buffer.getChannelData(0);
+    let phase = 0;
+
+    for (let i = 0; i < length; i++) {
+      const t = i / sampleRate;
+      // 元の「ポイッ」という音色（上昇する三角波）を保つ。
+      const frequency = t <= 0.035
+        ? 520 * Math.pow(760 / 520, t / 0.035)
+        : t <= 0.10
+          ? 760 * Math.pow(620 / 760, (t - 0.035) / 0.065)
+          : 620;
+      phase += 2 * Math.PI * frequency / sampleRate;
+      const triangle = 2 / Math.PI * Math.asin(Math.sin(phase));
+      const volume = t <= 0.03
+        ? 0.11 * Math.pow(0.075 / 0.11, t / 0.03)
+        : t <= 0.11
+          ? 0.075 * Math.pow(0.0001 / 0.075, (t - 0.03) / 0.08)
+          : 0;
+      // 最初の0.7msで微小なフェードをかけ、クリック音を防ぐ。
+      const clickGuard = Math.min(1, t / 0.0007);
+      channel[i] = triangle * volume * clickGuard;
+    }
+    return buffer;
+  }
+
   setEnabled(enabled, gameState) {
     if (this.enabled === enabled) return;
     this.enabled = enabled;
@@ -108,6 +149,10 @@ export class SoundManager {
         const now = this.context.currentTime;
         this.master.gain.cancelScheduledValues(now);
         this.master.gain.setTargetAtTime(0.0001, now, 0.012);
+        if (this.jumpOutput) {
+          this.jumpOutput.gain.cancelScheduledValues(now);
+          this.jumpOutput.gain.setTargetAtTime(0.0001, now, 0.012);
+        }
       }
       return;
     }
@@ -116,6 +161,10 @@ export class SoundManager {
     const now = ctx.currentTime;
     this.master.gain.cancelScheduledValues(now);
     this.master.gain.setTargetAtTime(MASTER_VOLUME, now, 0.018);
+    if (this.jumpOutput) {
+      this.jumpOutput.gain.cancelScheduledValues(now);
+      this.jumpOutput.gain.setTargetAtTime(MASTER_VOLUME * 1.28, now, 0.018);
+    }
     if (gameState === "PLAYING") this.startMusic();
     if (gameState === "GOAL" || gameState === "CLEAR") this.startClearMusic();
   }
@@ -301,30 +350,15 @@ export class SoundManager {
     const ctx = this.prepare();
     if (!ctx) return;
 
-    const t = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    // 瞬間的に輪郭のある「ポイッ」という軽いジャンプ音。
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(520, t);
-    osc.frequency.exponentialRampToValueAtTime(760, t + 0.035);
-    osc.frequency.exponentialRampToValueAtTime(620, t + 0.10);
-
-    // 入力と同時に発音。ゆっくり立ち上がる包絡を使わない。
-    gain.gain.setValueAtTime(0.11, t);
-    gain.gain.exponentialRampToValueAtTime(0.075, t + 0.03);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
-
-    osc.connect(gain);
-    gain.connect(this.effects);
-    osc.start(t);
-    osc.stop(t + 0.12);
-
-    osc.onended = () => {
-      osc.disconnect();
-      gain.disconnect();
-    };
+    // 入力イベントで、準備済みの0.12秒の波形を即座に再生する。
+    // 毎回OscillatorとGainを作る方式より、入力時の処理を小さくする。
+    const buffer = this.jumpBuffer || (this.jumpBuffer = this.createJumpBuffer());
+    if (!buffer) return;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(this.jumpOutput);
+    source.start();
+    source.onended = () => source.disconnect();
   }
 
   playLand() {
