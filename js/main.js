@@ -19,6 +19,15 @@ const input = new InputController(document.querySelectorAll(".control-button"));
 const renderer = new Renderer(canvas);
 const sound = new SoundManager();
 const game = new Game(onStateChange);
+
+// 音を入力イベント内で即時に鳴らす。物理更新時の二重再生を防ぐ。
+let jumpSoundPlayedOnPress = false;
+input.onJumpPressed = () => {
+  if (game.state === "PLAYING" && game.player.grounded) {
+    sound.playJump();
+    jumpSoundPlayedOnPress = true;
+  }
+};
 const hasKeyboardPointer = matchMedia("(hover: hover) and (pointer: fine)");
 
 noteLink.href = CONFIG.noteUrl;
@@ -32,16 +41,16 @@ function onStateChange(state) {
   input.setEnabled(playing);
   if (state === "PLAYING") sound.startMusic();
   if (state === "GOAL") {
-    sound.stopMusic();
-    sound.playGoalTape();
-    // テープを切った瞬間から、クリア専用のBGMを流し続ける。
-    sound.startClearMusic();
+    jumpSoundPlayedOnPress = false;
+    sound.beginGoalSequence();
   }
+  if (state === "CLEAR") jumpSoundPlayedOnPress = false;
 }
 
 function beginGame() {
   // 音声再生をユーザー操作の直後に許可してもらう（特にiPhone Safari）。
   sound.prepare();
+  jumpSoundPlayedOnPress = false;
   game.start();
   sound.playStart();
   startButton.blur();
@@ -113,7 +122,11 @@ function frame(timestamp) {
         const wasGrounded = game.player.grounded;
         const wasPlaying = game.state === "PLAYING";
         game.update(step, input.snapshot());
-        if (wasPlaying && wasGrounded && !game.player.grounded) sound.playJump();
+        // 通常は入力時点で音が鳴る。着地直前のジャンプ予約などだけここで補う。
+        if (wasPlaying && wasGrounded && !game.player.grounded && !jumpSoundPlayedOnPress) {
+          sound.playJump();
+        }
+        jumpSoundPlayedOnPress = false;
         if (wasPlaying && !wasGrounded && game.player.grounded) sound.playLand();
         accumulator -= step;
         count++;
