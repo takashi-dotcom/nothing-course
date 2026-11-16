@@ -2,6 +2,7 @@ import { CONFIG } from "./config.js";
 import { InputController } from "./input.js";
 import { Game } from "./game.js";
 import { Renderer } from "./render.js";
+import { SoundManager } from "./sound.js";
 
 const stage = document.getElementById("stage");
 const canvas = document.getElementById("gameCanvas");
@@ -12,9 +13,11 @@ const hint = document.getElementById("keyboardHint");
 const startButton = document.getElementById("startButton");
 const replayButton = document.getElementById("replayButton");
 const noteLink = document.getElementById("noteLink");
+const soundToggle = document.getElementById("soundToggle");
 
 const input = new InputController(document.querySelectorAll(".control-button"));
 const renderer = new Renderer(canvas);
+const sound = new SoundManager();
 const game = new Game(onStateChange);
 const hasKeyboardPointer = matchMedia("(hover: hover) and (pointer: fine)");
 
@@ -27,12 +30,39 @@ function onStateChange(state) {
   controls.hidden = !playing;
   hint.hidden = true;
   input.setEnabled(playing);
+  if (state === "PLAYING") sound.startMusic();
+  if (state === "GOAL") {
+    sound.stopMusic();
+    sound.playGoalTape();
+  }
+  if (state === "CLEAR") sound.playClear();
 }
 
 function beginGame() {
+  // 音声再生をユーザー操作の直後に許可してもらう（特にiPhone Safari）。
+  sound.prepare();
   game.start();
+  sound.playStart();
   startButton.blur();
   replayButton.blur();
+}
+
+function updateSoundButton() {
+  const enabled = sound.enabled;
+  soundToggle.setAttribute("aria-pressed", String(enabled));
+  soundToggle.setAttribute("aria-label", enabled ? "音を消す" : "音を出す");
+  soundToggle.title = enabled ? "音を消す" : "音を出す";
+  soundToggle.classList.toggle("is-muted", !enabled);
+}
+
+soundToggle.addEventListener("click", () => {
+  sound.setEnabled(!sound.enabled, game.state === "PLAYING");
+  updateSoundButton();
+  soundToggle.blur();
+});
+// ほかのアプリから戻った際、次のタッチ操作で音声が再開できるようにする。
+for (const button of document.querySelectorAll(".control-button")) {
+  button.addEventListener("pointerdown", () => sound.prepare());
 }
 
 startButton.addEventListener("click", beginGame);
@@ -62,6 +92,7 @@ document.addEventListener("visibilitychange", () => {
   input.clear();
   lastTimestamp = 0;
   accumulator = 0;
+  sound.onVisibilityChange(document.hidden, game.state === "PLAYING");
 });
 
 let lastTimestamp = 0;
@@ -78,7 +109,11 @@ function frame(timestamp) {
       accumulator += elapsed;
       let count = 0;
       while (accumulator >= step && count < CONFIG.simulation.maxStepsPerFrame) {
+        const wasGrounded = game.player.grounded;
+        const wasPlaying = game.state === "PLAYING";
         game.update(step, input.snapshot());
+        if (wasPlaying && wasGrounded && !game.player.grounded) sound.playJump();
+        if (wasPlaying && !wasGrounded && game.player.grounded) sound.playLand();
         accumulator -= step;
         count++;
       }
@@ -98,6 +133,7 @@ function frame(timestamp) {
   }
 }
 
+updateSoundButton();
 onStateChange("TITLE");
 resize();
 requestAnimationFrame(frame);
