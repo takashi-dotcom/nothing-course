@@ -14,6 +14,8 @@
       <div class="stage" id="stage">
         <canvas id="gameCanvas" aria-label="青空と草原を走る横スクロールゲーム">Canvas対応ブラウザで遊べます。</canvas>
 
+        <button type="button" class="sound-toggle" id="soundToggle" aria-label="音を消す" aria-pressed="true" title="音を消す"><span aria-hidden="true">♪</span></button>
+
         <div class="screen title-screen" id="titleScreen">
           <div class="title-panel">
             <p class="eyebrow">小さな旅のゲーム</p>
@@ -41,7 +43,7 @@
         <button class="control-button control-jump" type="button" data-action="jump" aria-label="ジャンプ"><span aria-hidden="true">↑</span></button>
       </div>
     </section>
-    <p class="prototype-label">試作品 ver.0.1 · 音声なし · スコア・時間制限なし</p>
+    <p class="prototype-label">試作品 ver.0.2 · オリジナルBGMと効果音 · スコア・時間制限なし</p>
   </main>
   <script type="module" src="./js/main.js"></script>
 </body>
