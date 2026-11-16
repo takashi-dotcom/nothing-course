@@ -73,10 +73,47 @@ h1 { margin: 0 0 24px; font-size: clamp(26px, 4.2vw, 51px); letter-spacing: .06e
   touch-action: manipulation;
 }
 .action-button:active { transform: translateY(2px); box-shadow: 0 2px 0 #2d728e; }
-.action-button:focus-visible, .control-button:focus-visible { outline: 4px solid #f6c751; outline-offset: 3px; }
+.action-button:focus-visible, .control-button:focus-visible, .sound-toggle:focus-visible { outline: 4px solid #f6c751; outline-offset: 3px; }
 .action-secondary { background: rgba(255,255,255,.95); color: #2f708a; box-shadow: 0 4px 0 #a2c6cb; }
 .action-secondary:active { box-shadow: 0 2px 0 #a2c6cb; }
 .start-button { min-width: 170px; }
+.sound-toggle {
+  appearance: none;
+  position: absolute;
+  z-index: 5;
+  top: 12px;
+  right: 12px;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 2px solid rgba(53,110,134,.28);
+  background: rgba(255,255,255,.85);
+  box-shadow: 0 3px 9px rgba(49,109,120,.16);
+  color: #356e86;
+  font-size: 29px;
+  line-height: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.sound-toggle.is-muted { color: #879da8; background: rgba(255,255,255,.70); }
+.sound-toggle.is-muted::after {
+  content: "";
+  position: absolute;
+  width: 34px;
+  height: 2.5px;
+  border-radius: 4px;
+  background: #8b939b;
+  transform: rotate(-45deg);
+  box-shadow: 0 1px 0 rgba(255,255,255,.8);
+}
+.sound-toggle:active { transform: scale(.95); }
+
 .keyboard-hint {
   position: absolute;
   z-index: 2;
