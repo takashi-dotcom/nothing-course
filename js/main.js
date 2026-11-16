@@ -35,7 +35,7 @@ function onStateChange(state) {
     sound.stopMusic();
     sound.playGoalTape();
   }
-  if (state === "CLEAR") sound.playClear();
+  if (state === "CLEAR") sound.startClearMusic();
 }
 
 function beginGame() {
@@ -56,7 +56,7 @@ function updateSoundButton() {
 }
 
 soundToggle.addEventListener("click", () => {
-  sound.setEnabled(!sound.enabled, game.state === "PLAYING");
+  sound.setEnabled(!sound.enabled, game.state);
   updateSoundButton();
   soundToggle.blur();
 });
@@ -92,7 +92,7 @@ document.addEventListener("visibilitychange", () => {
   input.clear();
   lastTimestamp = 0;
   accumulator = 0;
-  sound.onVisibilityChange(document.hidden, game.state === "PLAYING");
+  sound.onVisibilityChange(document.hidden, game.state);
 });
 
 let lastTimestamp = 0;
