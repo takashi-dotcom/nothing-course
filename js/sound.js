@@ -1,7 +1,7 @@
 // オリジナルの短いメロディと効果音をWeb Audio APIで合成する。
 // 外部の音声ファイルやライブラリは使用しない。
-// 前バージョン1.4の1.5倍。波形振幅の設定値であり聴感上の1.5倍とは限らない。
-const MASTER_VOLUME = 2.1;
+// BGM・効果音をこれまでの音量から一律20%下げる（2.1 × 0.8 = 1.68）。
+const MASTER_VOLUME = 1.68;
 const MUSIC_BPM = 112;
 const BEAT_SECONDS = 60 / MUSIC_BPM;
 
