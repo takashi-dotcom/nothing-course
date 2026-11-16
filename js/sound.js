@@ -1,16 +1,24 @@
 // オリジナルの短いメロディと効果音をWeb Audio APIで合成する。
 // 外部の音声ファイルやライブラリは使用しない。
-// マスター音量。旧0.7から2倍の1.4（音圧振幅で約+6dB）に調整。
-const MASTER_VOLUME = 1.4;
+// 前バージョン1.4の1.5倍。波形振幅の設定値であり聴感上の1.5倍とは限らない。
+const MASTER_VOLUME = 2.1;
 const MUSIC_BPM = 112;
 const BEAT_SECONDS = 60 / MUSIC_BPM;
+
+// ハ長調（C major）。メロディはC・F・Gメジャーコードの構成音だけに限定。
+// null は前の音を伸ばすための休符で、短い音の連続を避ける。
 const MELODY = [
-  72, 76, 79, 76, 74, 76, 79, null,
-  72, 76, 81, 79, 76, 74, 72, null,
-  69, 72, 76, 72, 67, 69, 72, null,
-  71, 74, 79, 74, 72, null, 72, null
+  76, null, 79, 84,  // C: E - G C
+  81, null, 84, 81,  // F: A - C A
+  79, null, 83, 86,  // G: G - B D
+  84, null, 79, 76,  // C: C - G E
+  81, null, 77, 81,  // F: A - F A
+  79, null, 76, 79,  // C: G - E G
+  83, 86, 83, 79,    // G: B D B G
+  79, 76, 84, null   // C: G E C -
 ];
-const CHORD_ROOTS = [48, 43, 45, 41, 48, 41, 43, 48];
+const CHORD_ROOTS = [48, 53, 55, 48, 53, 48, 55, 48];
+const MAJOR_TRIAD_INTERVALS = [0, 4, 7];
 
 function pitch(midi) {
   return 440 * Math.pow(2, (midi - 69) / 12);
@@ -43,7 +51,15 @@ export class SoundManager {
         this.context = new AudioContextType();
         this.master = this.context.createGain();
         this.master.gain.value = MASTER_VOLUME;
-        this.master.connect(this.context.destination);
+        // 音量を引き上げたぶん、重なった和音で音割れしないようピークを軽く抑える。
+        this.limiter = this.context.createDynamicsCompressor();
+        this.limiter.threshold.value = -3;
+        this.limiter.knee.value = 3;
+        this.limiter.ratio.value = 12;
+        this.limiter.attack.value = 0.003;
+        this.limiter.release.value = 0.18;
+        this.master.connect(this.limiter);
+        this.limiter.connect(this.context.destination);
         this.effects = this.context.createGain();
         this.effects.gain.value = 0.78;
         this.effects.connect(this.master);
@@ -82,25 +98,48 @@ export class SoundManager {
     if (isPlaying) this.startMusic();
   }
 
-  note(midi, when, duration, volume, type, destination, attack = 0.015) {
+  note(midi, when, duration, volume, type, destination, attack = 0.018, sustain = 0.78, release = 0.13) {
     if (!this.context || !destination) return;
     const ctx = this.context;
     const osc = ctx.createOscillator();
     const envelope = ctx.createGain();
-    const safeAttack = Math.min(duration / 3, attack);
+    const safeDuration = Math.max(0.035, duration);
+    const safeAttack = Math.max(0.008, Math.min(safeDuration * 0.18, attack));
+    const safeRelease = Math.min(safeDuration * 0.35, release);
+    const holdEnd = Math.max(when + safeAttack + 0.003, when + safeDuration - safeRelease);
+    const safeLevel = Math.max(0.0002, volume * sustain);
     osc.type = type;
     osc.frequency.setValueAtTime(pitch(midi), when);
     envelope.gain.setValueAtTime(0.0001, when);
     envelope.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume), when + safeAttack);
-    envelope.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+    envelope.gain.exponentialRampToValueAtTime(safeLevel, holdEnd);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, when + safeDuration);
     osc.connect(envelope);
     envelope.connect(destination);
     osc.start(when);
-    osc.stop(when + duration + 0.015);
+    osc.stop(when + safeDuration + 0.015);
     osc.onended = () => {
       osc.disconnect();
       envelope.disconnect();
     };
+  }
+
+  // メロディの各音と同じメジャーコードに含まれる、すぐ下の構成音を重ねる。
+  lowerHarmony(melodyNote, root) {
+    let note = melodyNote - 1;
+    while (!MAJOR_TRIAD_INTERVALS.includes(((note - root) % 12 + 12) % 12)) {
+      note--;
+    }
+    return note;
+  }
+
+  // 次の発音まで伸ばす。音楽が「ポン、ポン」と途切れ続けないための設計。
+  melodyDuration(index) {
+    let beats = 1;
+    while (beats < MELODY.length && MELODY[(index + beats) % MELODY.length] === null) {
+      beats++;
+    }
+    return Math.max(0.18, beats * BEAT_SECONDS - 0.045);
   }
 
   scheduleMusic() {
@@ -112,18 +151,24 @@ export class SoundManager {
       const now = this.nextBeatTime;
       const melodyNote = MELODY[index];
 
-      // 音の粒を少し丸くした、木琴のような単音メロディ。
-      if (melodyNote !== null) {
-        this.note(melodyNote, now, BEAT_SECONDS * 0.77, 0.065, "sine", this.musicBus);
-        this.note(melodyNote + 12, now, BEAT_SECONDS * 0.24, 0.009, "triangle", this.musicBus);
-      }
-      // 4拍に1度だけ、柔らかな和音で草原の空気感を支える。
+      const root = CHORD_ROOTS[Math.floor(index / 4)];
+      // 4拍のあいだメジャー三和音を鳴らし続け、音の隙間を作らない。
       if (index % 4 === 0) {
-        const root = CHORD_ROOTS[Math.floor(index / 4)];
-        for (const shift of [0, 7, 12]) {
-          this.note(root + shift, now, BEAT_SECONDS * 3.6,
-            0.012, "triangle", this.musicBus, 0.14);
+        for (const interval of MAJOR_TRIAD_INTERVALS) {
+          this.note(root + 12 + interval, now, BEAT_SECONDS * 4.06,
+            0.030, "triangle", this.musicBus, 0.26, 0.90, 0.30);
         }
+        this.note(root, now, BEAT_SECONDS * 3.96,
+          0.026, "sine", this.musicBus, 0.09, 0.83, 0.25);
+      }
+
+      // 1〜2拍にまたがる滑らかな主旋律＋同じメジャーコードの下声。
+      if (melodyNote !== null) {
+        const duration = this.melodyDuration(index);
+        this.note(melodyNote, now, duration,
+          0.065, "sine", this.musicBus, 0.034, 0.91, 0.15);
+        this.note(this.lowerHarmony(melodyNote, root), now, duration,
+          0.021, "triangle", this.musicBus, 0.06, 0.85, 0.17);
       }
       this.nextBeatTime += BEAT_SECONDS;
       this.beatIndex++;
