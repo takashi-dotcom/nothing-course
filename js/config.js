@@ -28,6 +28,6 @@ export const CONFIG = Object.freeze({
     offsetFromCenter: -32,
     followStrength: 13
   },
-  // 記事公開後、具体的なnote記事URLへ差し替える。
-  noteUrl: "https://note.com/joyful_cougar823"
+  // note本記事への戻り先。
+  noteUrl: "https://note.com/joyful_cougar823/n/na695ff43b1e5"
 });
